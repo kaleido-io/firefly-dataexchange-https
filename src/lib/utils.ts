@@ -14,47 +14,48 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import axios, { AxiosRequestConfig } from 'axios';
-import newBusboy from 'busboy';
-import { Request } from 'express';
-import { promises as fs } from 'fs';
-import { X509 } from 'jsrsasign';
-import { ICertData, IFile } from './interfaces';
-import { Logger } from './logger';
-import RequestError from './request-error';
+import axios, { AxiosRequestConfig } from "axios";
+import newBusboy from "busboy";
+import { Request } from "express";
+import { promises as fs } from "fs";
+import { X509 } from "jsrsasign";
+import { ICertData, IFile } from "./interfaces";
+import { Logger } from "./logger";
+import RequestError from "./request-error";
 import { TLSSocket } from "tls";
 
 export const constants = {
-  LOG_LEVEL: process.env.LOG_LEVEL || 'info',
-  DATA_DIRECTORY: process.env.DATA_DIRECTORY || '/data',
-  PEER_CERTS_SUBDIRECTORY: 'peer-certs',
-  BLOBS_SUBDIRECTORY: 'blobs',
-  METADATA_SUFFIX: '.metadata.json',
-  RECEIVED_BLOBS_SUBDIRECTORY: 'received',
-  CONFIG_FILE_NAME: 'config.json',
-  PEERS_FILE_NAME: 'peers/data.json',
-  CERT_FILE: 'cert.pem',
-  KEY_FILE: 'key.pem',
-  CA_FILE: 'ca.pem',
-  DESTINATIONS_FILE_NAME: 'destinations/data.json',
-  TRANSFER_HASH_ALGORITHM: 'sha256',
+  LOG_LEVEL: process.env.LOG_LEVEL || "info",
+  DATA_DIRECTORY: process.env.DATA_DIRECTORY || "/data",
+  PEER_CERTS_SUBDIRECTORY: "peer-certs",
+  BLOBS_SUBDIRECTORY: "blobs",
+  METADATA_SUFFIX: ".metadata.json",
+  RECEIVED_BLOBS_SUBDIRECTORY: "received",
+  CONFIG_FILE_NAME: "config.json",
+  PEERS_FILE_NAME: "peers/data.json",
+  CERT_FILE: "cert.pem",
+  KEY_FILE: "key.pem",
+  CA_FILE: "ca.pem",
+  DESTINATIONS_FILE_NAME: "destinations/data.json",
+  TRANSFER_HASH_ALGORITHM: "sha256",
   REST_API_CALL_MAX_ATTEMPTS: 5,
   REST_API_CALL_RETRY_DELAY_MS: 500,
   REST_API_CALL_REQUEST_TIMEOUT: 5000,
   REST_API_CALL_BLOB_REQUEST_TIMEOUT: 60000,
   MAX_EVENT_QUEUE_SIZE: 1000,
-  HASH_HEADER_NAME: 'dx-hash',
-  SIZE_HEADER_NAME: 'dx-size',
-  LAST_UPDATE_HEADER_NAME: 'dx-last-update',
-  DEFAULT_JSON_PARSER_LIMIT: '1mb',
-  DEFAULT_MAX_INFLIGHT: 100
+  HASH_HEADER_NAME: "dx-hash",
+  SIZE_HEADER_NAME: "dx-size",
+  LAST_UPDATE_HEADER_NAME: "dx-last-update",
+  DEFAULT_JSON_PARSER_LIMIT: "1mb",
+  DEFAULT_MAX_INFLIGHT: 100,
+  FF_NAME_REGEX: new RegExp("^[0-9a-zA-Z]([0-9a-zA-Z._-]{0,62}[0-9a-zA-Z])?$"),
 };
-const log = new Logger('utils.ts');
+const log = new Logger("utils.ts");
 axios.defaults.timeout = constants.REST_API_CALL_REQUEST_TIMEOUT;
 
 export const regexp = {
   FILE_KEY: /^(\/[a-z0-9\+\-\_\.]+)+$/i,
-  CONSECUTIVE_DOTS: /\.\./
+  CONSECUTIVE_DOTS: /\.\./,
 };
 
 export const fileExists = async (filePath: string): Promise<boolean> => {
@@ -68,60 +69,83 @@ export const fileExists = async (filePath: string): Promise<boolean> => {
       throw err;
     }
   }
-}
+};
 
-export const extractFileFromMultipartForm = (req: Request): Promise<{
-  file: IFile, senderDestination: string | undefined,
-  recipientDestination: string | undefined
+export const extractFileFromMultipartForm = (
+  req: Request
+): Promise<{
+  file: IFile;
+  senderDestination: string | undefined;
+  recipientDestination: string | undefined;
 }> => {
   return new Promise(async (resolve, reject) => {
     let fileFound = false;
     let senderDestination: string | undefined = undefined;
     let recipientDestination: string | undefined = undefined;
-    req.pipe(newBusboy({ headers: req.headers })
-      .on('field', (fieldname, value) => {
-        switch (fieldname) {
-          case 'senderDestination': senderDestination = value; break;
-          case 'recipientDestination': recipientDestination = value; break;
-        }
-      })
-      .on('file', (fieldname, readableStream, file) => {
-        fileFound = true;
-        resolve({
-          senderDestination,
-          recipientDestination,
-          file: {
-            key: fieldname,
-            name: file.filename,
-            readableStream
-          }
-        });
-      })).on('finish', () => {
+    req
+      .pipe(
+        newBusboy({ headers: req.headers })
+          .on("field", (fieldname, value) => {
+            switch (fieldname) {
+              case "senderDestination":
+                senderDestination = value;
+                break;
+              case "recipientDestination":
+                recipientDestination = value;
+                break;
+            }
+          })
+          .on("file", (fieldname, readableStream, file) => {
+            fileFound = true;
+            resolve({
+              senderDestination,
+              recipientDestination,
+              file: {
+                key: fieldname,
+                name: file.filename,
+                readableStream,
+              },
+            });
+          })
+      )
+      .on("finish", () => {
         if (!fileFound) {
-          reject(new RequestError('Missing blob', 400));
+          reject(new RequestError("Missing blob", 400));
         }
       });
   });
 };
 
-export const extractMessageFromMultipartForm = (req: Request): Promise<{
-  senderDestination: string | undefined,
-  recipientDestination: string | undefined, message: string
+export const extractMessageFromMultipartForm = (
+  req: Request
+): Promise<{
+  senderDestination: string | undefined;
+  recipientDestination: string | undefined;
+  message: string;
 }> => {
   return new Promise(async (resolve, reject) => {
     let message: string | undefined = undefined;
     let senderDestination: string | undefined = undefined;
     let recipientDestination: string | undefined = undefined;
-    req.pipe(newBusboy({ headers: req.headers })
-      .on('field', (fieldname, value) => {
-        switch (fieldname) {
-          case 'senderDestination': senderDestination = value; break;
-          case 'recipientDestination': recipientDestination = value; break;
-          case 'message': message = value; break;
-        }
-      })).on('finish', () => {
+    req
+      .pipe(
+        newBusboy({ headers: req.headers }).on("field", (fieldname, value) => {
+          switch (fieldname) {
+            case "senderDestination":
+              senderDestination = value;
+              break;
+            case "recipientDestination":
+              recipientDestination = value;
+              break;
+            case "message":
+              message = value;
+              break;
+          }
+        })
+      )
+      .on("finish", () => {
         if (message === undefined) {
-          reject(new RequestError('Missing message', 400));
+          reject(new RequestError("Missing message", 400));
         } else {
           resolve({ message, senderDestination, recipientDestination });
         }
@@ -138,20 +162,28 @@ export const axiosWithRetry = async (config: AxiosRequestConfig) => {
       return await axios(config);
     } catch (err: any) {
       const data = err.response?.data;
-      log.error(`${config.method} ${config.url} attempt ${attempts} [${err.response?.status}]`, (data && !data.on) ? data : err.stack);
+      log.error(
+        `${config.method} ${config.url} attempt ${attempts} [${err.response?.status}]`,
+        data && !data.on ? data : err.stack
+      );
       if (err.response?.status === 404) {
         throw data.error ? new Error(data.error) : err;
       } else {
         currentError = err;
         attempts++;
-        await new Promise(resolve => setTimeout(resolve, constants.REST_API_CALL_RETRY_DELAY_MS));
+        await new Promise((resolve) =>
+          setTimeout(resolve, constants.REST_API_CALL_RETRY_DELAY_MS)
+        );
       }
     }
   }
   throw currentError;
 };
 
-export const getPeerID = (organization: string | undefined, organizationUnit: string | undefined) => {
+export const getPeerID = (
+  organization: string | undefined,
+  organizationUnit: string | undefined
+) => {
   if (organization !== undefined) {
     if (organizationUnit !== undefined) {
       return `${organization}-${organizationUnit}`;
@@ -161,7 +193,7 @@ export const getPeerID = (organization: string | undefined, organizationUnit: st
   } else if (organizationUnit !== undefined) {
     return organizationUnit;
   } else {
-    throw new Error('Invalid peer');
+    throw new Error("Invalid peer");
   }
 };
 
@@ -169,12 +201,12 @@ export const getCertData = (cert: string): ICertData => {
   const x509 = new X509();
   x509.readCertPEM(cert);
   const subject = x509.getSubjectString();
-  const o = subject.match('O=([^\/.]+)');
+  const o = subject.match("O=([^/.]+)");
   let certData: ICertData = {};
   if (o !== null) {
     certData.organization = o[1];
   }
-  const ou = subject.match('OU=([^\/.]+)');
+  const ou = subject.match("OU=([^/.]+)");
   if (ou !== null) {
     certData.organizationUnit = ou[1];
   }
@@ -182,6 +214,10 @@ export const getCertData = (cert: string): ICertData => {
 };
 
 export const extractPeerSenderFromRequest = (req: Request): string => {
-  const cert = ((req.socket) as TLSSocket).getPeerCertificate();
+  const cert = (req.socket as TLSSocket).getPeerCertificate();
   return getPeerID(cert.subject.O, cert.subject.OU);
+};
+
+export const validateName = (input: string): boolean => {
+  return constants.FF_NAME_REGEX.test(input);
 };

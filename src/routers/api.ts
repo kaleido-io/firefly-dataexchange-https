@@ -171,6 +171,9 @@ router.post('/messages', async (req, res, next) => {
       throw new RequestError('Missing recipient', 400);
     }
     let requestId: string = req.body.requestId ?? uuidV4();
+    if (!utils.validateName(requestId)) {
+      throw new RequestError(`Invalid requestId`, 400);
+    }
     if (recipientID === peerID) {
       if (recipientDestination !== undefined && !config.destinations?.includes(recipientDestination)) {
         throw new RequestError(`Unknown recipient destination expected=${config.destinations?.join('|') ?? 'none'} recieved=${recipientDestination}`, 400);
@@ -280,6 +283,9 @@ router.post('/transfers', async (req, res, next) => {
       throw new RequestError('Missing recipient', 400);
     }
     let requestId: string = req.body.requestId ?? uuidV4();
+    if (!utils.validateName(requestId)) {
+      throw new RequestError(`Invalid requestId`, 400);
+    }
     if (recipientID === peerID) {
       dispatchInternalBlob(req.body.sender, req.body.recipient, req.body.path);
     } else {
